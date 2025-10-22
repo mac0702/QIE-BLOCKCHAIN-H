@@ -28,6 +28,12 @@ const config = {
       chainId: 31337,
       type: "edr-simulated",
     }, // Local development network
+    localhost: {
+      url: "http://127.0.0.1:8545",
+      chainId: 31337,
+      type: "http",
+      // No accounts specified - will use the unlocked accounts from the local node
+    },
     sepolia: {
       url: SEPOLIA_RPC_URL, // Read from .env
       accounts: [PRIVATE_KEY], // normalized private key

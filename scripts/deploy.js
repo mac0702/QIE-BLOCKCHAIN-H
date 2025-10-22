@@ -2,45 +2,40 @@ import hre from "hardhat";
 import { ethers } from "ethers";
 
 async function main() {
-  // Create a provider connected to the target network
-  const url =
-    (hre.network && hre.network.config && hre.network.config.url) ||
-    "http://127.0.0.1:8545";
-  const provider = new ethers.JsonRpcProvider(url);
-
-  // Fast preflight: try a single RPC call with a short timeout to detect unreachable RPCs
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
-    // ethers v6 JsonRpcProvider doesn't accept AbortSignal directly for send; we'll use a quick RPC request
-    await provider.send("eth_chainId", []);
-    clearTimeout(timeout);
-  } catch (err) {
-    throw new Error(
-      `RPC connectivity check failed for ${url}: ${
-        err.message || err
-      }. Start a local node (npx hardhat node) or set a valid RPC URL in .env`
-    );
-  }
-
   let signer;
-  if (process.env.PRIVATE_KEY && process.env.PRIVATE_KEY !== "") {
+  
+  // For localhost/hardhat networks, use unlocked accounts from the local node
+  if (hre.network.name === "hardhat" || hre.network.name === "localhost") {
+    const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
+    
+    // Get the unlocked accounts from the local node
+    const accounts = await provider.send("eth_accounts", []);
+    if (!accounts || accounts.length === 0) {
+      throw new Error(
+        "No accounts available from local node. Make sure hardhat node is running."
+      );
+    }
+    
+    // Use getSigner with index to get an unlocked signer from the node
+    signer = await provider.getSigner(0);
+    const address = await signer.getAddress();
+    console.log("Deploying with local test account:", address);
+  } else {
+    // For testnets/mainnets, use private key
+    if (!process.env.PRIVATE_KEY || process.env.PRIVATE_KEY === "") {
+      throw new Error("PRIVATE_KEY not set in .env");
+    }
+    
+    const url =
+      (hre.network && hre.network.config && hre.network.config.url) ||
+      process.env.SEPOLIA_RPC_URL;
+    const provider = new ethers.JsonRpcProvider(url);
+    
     const key = process.env.PRIVATE_KEY.startsWith("0x")
       ? process.env.PRIVATE_KEY
       : `0x${process.env.PRIVATE_KEY}`;
     signer = new ethers.Wallet(key, provider);
     console.log("Deploying with account:", await signer.getAddress());
-  } else {
-    // Fallback: use the first account from the local JSON-RPC (if available)
-    const accounts = await provider.send("eth_accounts", []);
-    if (accounts && accounts.length > 0) {
-      signer = provider.getSigner(accounts[0]);
-      console.log("Deploying with RPC account:", accounts[0]);
-    } else {
-      throw new Error(
-        "No signer available: set PRIVATE_KEY in .env or run a local node with unlocked accounts"
-      );
-    }
   }
 
   // NOTE: The original script referenced `MyContract` which isn't present in this
